@@ -1,0 +1,29 @@
+
+python process_data.py -f ./wiki/enwiki-20061130-pages-articles.xml.bz2 -o ./wiki/wikipedia-2006-11/ --type wiki
+
+
+python shard_data.py \
+    --dir ./wiki/wikipedia-2001-08/ \
+    -o ./wiki/wikipedia-2001-08/raw_shards/ \
+    --num_train_shards 64 \
+    --num_test_shards 64 \
+    --frac_test 0.1
+    
+    
+python merge_shards.py \
+    --data ./wiki/wikipedia-2001-08/raw_shards_test/ \
+    --output_dir ./wiki/wikipedia-2001-08/ \
+    --ratio 64
+    
+    
+python run_mlm.py \
+    --model_type deberta \
+    --tokenizer_name microsoft/deberta-base \
+    --train_file  ./dataset/wiki/wikipedia-2001-08/train.txt \
+    --validation_file ./dataset/wiki/wikipedia-2001-08/test.txt \
+    --per_device_train_batch_size 8 \
+    --per_device_eval_batch_size 8 \
+    --do_train \
+    --do_eval \
+    --fp16 \
+    --output_dir ./model/test-mlm-deberta

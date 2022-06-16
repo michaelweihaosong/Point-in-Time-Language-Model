@@ -1,0 +1,10 @@
+datasets
+numpy
+tqdm
+sklearn
+nltk
+six
+h5py
+wikiextractor
+transformers==4.19.4
+torch==1.10.0
