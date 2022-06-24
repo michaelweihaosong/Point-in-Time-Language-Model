@@ -1,29 +1,86 @@
 
-python process_data.py -f ./wiki/enwiki-20061130-pages-articles.xml.bz2 -o ./wiki/wikipedia-2006-11/ --type wiki
+python process_data.py -f ./wiki/enwiki-20100312-pages-articles.xml.bz2 -o ./wiki/wikipedia-2010-03/ --type wiki
 
 
 python shard_data.py \
-    --dir ./wiki/wikipedia-2001-08/ \
-    -o ./wiki/wikipedia-2001-08/raw_shards/ \
-    --num_train_shards 64 \
-    --num_test_shards 64 \
-    --frac_test 0.1
+    --dir ./wiki/wikipedia-2010-03/ \
+    -o ./wiki/wikipedia-2010-03/raw_shards_train/ \
+    --num_train_shards 512 \
+    --num_test_shards 512 \
+    --frac_test 0.05
     
     
 python merge_shards.py \
-    --data ./wiki/wikipedia-2001-08/raw_shards_test/ \
-    --output_dir ./wiki/wikipedia-2001-08/ \
-    --ratio 64
+    --data ./wiki/wikipedia-2010-03/raw_shards_test/ \
+    --output_dir ./wiki/wikipedia-2010-03/ \
+    --ratio 512
     
     
-python run_mlm.py \
-    --model_type deberta \
+
+CUDA_VISIBLE_DEVICES=0 python run_mlm.py \
+    --model_name_or_path ./model/deberta-2006/ \
     --tokenizer_name microsoft/deberta-base \
-    --train_file  ./dataset/wiki/wikipedia-2001-08/train.txt \
-    --validation_file ./dataset/wiki/wikipedia-2001-08/test.txt \
-    --per_device_train_batch_size 8 \
-    --per_device_eval_batch_size 8 \
+    --train_file  ./dataset/wiki/wikipedia-2010-03/train.txt \
+    --validation_file ./dataset/wiki/wikipedia-2010-03/test.txt \
+    --per_device_train_batch_size 16 \
+    --per_device_eval_batch_size 16 \
     --do_train \
     --do_eval \
     --fp16 \
-    --output_dir ./model/test-mlm-deberta
+    --num_train_epochs 18 \
+    --gradient_accumulation_steps 16 \
+    --save_steps 2000 \
+    --learning_rate 5e-5 \
+    --weight_decay 0.01 \
+    --output_dir ./model/deberta-2010/
+    
+# Fine-tuning (GLUE)
+
+export MODEL_NAME=./model/deberta-2006    
+
+export TASK_NAME=rte
+CUDA_VISIBLE_DEVICES=0 python run_glue.py \
+  --model_name_or_path $MODEL_NAME \
+  --task_name $TASK_NAME \
+  --do_train \
+  --do_eval \
+  --max_seq_length 128 \
+  --per_device_train_batch_size 32 \
+  --learning_rate 2e-5 \
+  --num_train_epochs 3 \
+  --save_strategy no \
+  --fp16 \
+  --output_dir ${MODEL_NAME}_${TASK_NAME}/
+    
+    
+2001 wiki 0.1 GB
+2006 wiki 2.7 GB             expected 24 epochs = 65GB 5.5 days
+	cola (3e): matthews corr: 0.2848
+	sst2 (3e): acc: 0.8876
+	mrpc (5e): F1: 0.8033, acc: 0.7108
+	stsb (3e): pearson: 0.7542, spearman: 0.7536
+	qqp (3e): acc: 0.8852, F1: 0.8461
+	mnli (3e): acc_mm: 0.7822
+	qnli (3e): acc: 0.8715
+	rte (3e): acc: 0.5235											
+	wnli (5e): acc: 0.3099
+
+
+
+
+
+
+
+
+
+
+
+
+2010 wiki            6.1 GB             expected 18 epochs = 108B  9 days
+2020.6 DeBERTa base 10 epochs * 78GB
+
+BERT pretrain size: 40 epochs * 18GB (Wiki+Book) 720GB
+Deberta pretrain size: 10 epochs * 78GB 780GB
+
+
+2006-2013 Reuters 100k docs
